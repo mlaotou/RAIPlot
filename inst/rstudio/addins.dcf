@@ -1,0 +1,4 @@
+Name: AI Plot Generator
+Description: Use AI to generate adaptive plots for your data. Describe what you want and let GPT create beautiful ggplot2 visualizations.
+Binding: ai_plotter_addin
+Interactive: true
