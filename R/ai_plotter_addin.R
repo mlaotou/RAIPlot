@@ -1,6 +1,6 @@
 #' AI Plot Generator Addin
 #'
-#' RStudio Addin that generates ggplot2 code using OpenAI API
+#' RStudio Addin that generates ggplot2 code using AI API
 #' based on user description and data characteristics.
 #'
 #' @return NULL (invisibly). Opens a Shiny gadget for interaction.
@@ -32,6 +32,16 @@ ai_plotter_addin <- function() {
     return(invisible(NULL))
   }
 
+  # Get current AI config
+  ai_config <- tryCatch(
+    {
+      get_ai_config()
+    },
+    error = function(e) {
+      list(provider = "openai", model = "gpt-3.5-turbo", api_url = NULL, api_key = NULL)
+    }
+  )
+
   # Build UI
   ui <- miniUI::miniPage(
     miniUI::gadgetTitleBar(
@@ -42,15 +52,15 @@ ai_plotter_addin <- function() {
 
     miniUI::miniContentPanel(
       # Layout: Left side for input, right side for code preview
-      div(
+      tags$div(
         style = "display: flex; height: 100%;",
 
         # LEFT PANEL: Input configuration
-        div(
+        tags$div(
           style = "flex: 0 0 45%; padding: 15px; overflow-y: auto; border-right: 1px solid #ddd;",
 
           # Data selection
-          h4("📊 Data Configuration"),
+          tags$h4("📊 Data Configuration"),
           shiny::selectInput(
             inputId = "data_select",
             label = "Select Data Frame:",
@@ -59,10 +69,10 @@ ai_plotter_addin <- function() {
           ),
           shiny::verbatimTextOutput("data_info"),
 
-          br(),
+          tags$br(),
 
           # Plot description
-          h4("✍️ Describe Your Plot"),
+          tags$h4("✍️ Describe Your Plot"),
           shiny::textAreaInput(
             inputId = "plot_description",
             label = "What kind of plot do you want?",
@@ -71,27 +81,20 @@ ai_plotter_addin <- function() {
             placeholder = "Examples:\n- Scatter plot of X vs Y, colored by category\n- Box plot comparing groups\n- Time series with trend line"
           ),
 
-          br(),
+          tags$br(),
 
-          # API configuration
-          h4("🔑 AI Configuration"),
-          shiny::passwordInput(
-            inputId = "api_key",
-            label = "OpenAI API Key",
-            value = "",
-            placeholder = "Leave empty to use OPENAI_API_KEY env var"
+          # API configuration info
+          tags$h4("🔑 AI Configuration"),
+          tags$p(style = "font-size: 12px; color: #666;",
+            paste0("Provider: ", ai_config$provider, " | Model: ", ai_config$model)
           ),
-          shiny::selectInput(
-            inputId = "model",
-            label = "Model:",
-            choices = c(
-              "GPT-3.5 Turbo (faster)" = "gpt-3.5-turbo",
-              "GPT-4 (better quality)" = "gpt-4"
-            ),
-            selected = "gpt-3.5-turbo"
-          ),
+          if (!is.null(ai_config$api_url)) {
+            tags$p(style = "font-size: 11px; color: #888;",
+              paste0("API: ", ai_config$api_url)
+            )
+          },
 
-          br(),
+          tags$br(),
 
           # Action buttons
           shiny::actionButton(
@@ -99,7 +102,7 @@ ai_plotter_addin <- function() {
             label = "Generate Code",
             class = "btn-primary btn-block"
           ),
-          br(),
+          tags$br(),
 
           shiny::checkboxInput(
             inputId = "auto_execute",
@@ -114,15 +117,15 @@ ai_plotter_addin <- function() {
         ),
 
         # RIGHT PANEL: Code preview and results
-        div(
+        tags$div(
           style = "flex: 1; padding: 15px; overflow-y: auto; background-color: #f5f5f5;",
 
-          h4("💻 Generated Code"),
+          tags$h4("💻 Generated Code"),
           shiny::verbatimTextOutput("generated_code"),
 
-          br(),
+          tags$br(),
 
-          h4("📝 Status / Errors"),
+          tags$h4("📝 Status / Errors"),
           shiny::verbatimTextOutput("status_log")
         )
       )
@@ -152,35 +155,76 @@ ai_plotter_addin <- function() {
     # Generate code when button clicked
     shiny::observeEvent(input$generate_btn, {
 
-      # Validation
-      api_key <- input$api_key
-      if (api_key == "") {
-        api_key <- Sys.getenv("OPENAI_API_KEY")
-      }
-
-      shiny::req(api_key != "", cancelOutput = TRUE)
-      if (api_key == "") {
-        output$status_log <- shiny::renderText(
-          "❌ Error: No API key provided. Please set OPENAI_API_KEY environment variable or enter it above."
-        )
-        return()
-      }
-
-      shiny::req(input$plot_description != "", cancelOutput = TRUE)
-      shiny::req(input$data_select != "", cancelOutput = TRUE)
+      shiny::req(input$plot_description, cancelOutput = TRUE)
+      shiny::req(input$data_select, cancelOutput = TRUE)
 
       # Show progress
       output$status_log <- shiny::renderText("⏳ Generating code... Please wait.")
 
-      # Call OpenAI API
+      # Get AI config
+      ai_config <- tryCatch(
+        {
+          get_ai_config()
+        },
+        error = function(e) {
+          stop("Please configure AI first using configure_ai()")
+        }
+      )
+
+      # Build prompt
+      description <- if (is.null(input$plot_description) || input$plot_description == "") {
+        "Create a simple scatter plot"
+      } else {
+        input$plot_description
+      }
+
+      prompt <- paste0(
+        "Generate ggplot2 code to create a plot based on the following:\n\n",
+        "Data frame name: '", input$data_select, "'\n",
+        "Plot description: ", description, "\n\n",
+        "Requirements:\n",
+        "1. Return ONLY the R code, no explanations or markdown\n",
+        "2. Use library(ggplot2) at the beginning if needed\n",
+        "3. The code must be executable and work with the data frame named '",
+        input$data_select, "'\n",
+        "4. Use theme_minimal() or another appropriate theme\n",
+        "5. Add meaningful title, x label, y label\n",
+        "6. Handle missing values appropriately\n",
+        "7. Use a professional color palette\n",
+        "8. Make the plot publication-ready\n",
+        "9. Print the plot at the end with print(p) or just p\n",
+        "\n",
+        "The generated code should look like:\n",
+        "library(ggplot2)\n",
+        "p <- ggplot(...) +\n",
+        "  geom_*(...) +\n",
+        "  labs(...) +\n",
+        "  theme_minimal()\n",
+        "print(p)"
+      )
+
+      # Call AI API based on provider
       tryCatch(
         {
-          code <- call_openai_for_plot(
-            data_name = input$data_select,
-            description = input$plot_description,
-            api_key = api_key,
-            model = input$model
-          )
+          if (ai_config$provider == "custom") {
+            code <- RAIPlot:::call_custom_ai(prompt, ai_config)
+          } else {
+            # OpenAI
+            api_key <- if (is.null(ai_config$api_key) || ai_config$api_key == "") {
+              Sys.getenv("OPENAI_API_KEY")
+            } else {
+              ai_config$api_key
+            }
+            if (api_key == "") {
+              stop("No API key. Set with Sys.setenv(OPENAI_API_KEY='your-key')")
+            }
+            code <- call_openai_for_plot(
+              data_name = input$data_select,
+              description = input$plot_description,
+              api_key = api_key,
+              model = ai_config$model
+            )
+          }
 
           # Display generated code
           output$generated_code <- shiny::renderText(code)

@@ -28,6 +28,10 @@
 #'     api_key = ""  # Not needed for local services
 #'   )
 #' }
+
+# Package environment for storing config
+.RAIPlot_env <- new.env(parent = emptyenv())
+
 configure_ai <- function(provider = "openai",
                          api_key = NULL,
                          api_url = NULL,
@@ -177,74 +181,53 @@ call_custom_endpoint <- function(prompt, config) {
     stop("api_url must be specified for custom provider")
   }
 
-  # Build request headers
-  headers <- httr::add_headers(`Content-Type` = "application/json")
-
+  # Build request headers - add Authorization if api_key provided
   if (!is.null(config$api_key) && config$api_key != "") {
-    headers <- httr::add_headers(
+    headers <- httr::add_headers(Authorization = paste("Bearer", config$api_key))
+  } else {
+    headers <- NULL
+  }
+
+  # Build request body - OpenAI compatible format
+  body <- list(
+    model = config$model,
+    messages = list(
+      list(role = "system", content = "You are an R visualization expert."),
+      list(role = "user", content = prompt)
+    ),
+    temperature = 0.3,
+    max_tokens = 1500
+  )
+
+  # Make request
+  if (!is.null(headers)) {
+    response <- httr::POST(
+      config$api_url,
       headers,
-      Authorization = paste("Bearer", config$api_key)
+      httr::content_type_json(),
+      encode = "json",
+      body = body
+    )
+  } else {
+    response <- httr::POST(
+      config$api_url,
+      httr::content_type_json(),
+      encode = "json",
+      body = body
     )
   }
 
-  # Try different custom endpoint formats
-  # Format 1: OpenAI-compatible endpoint
-  tryCatch(
-    {
-      response <- httr::POST(
-        config$api_url,
-        headers,
-        encode = "json",
-        body = list(
-          model = config$model,
-          messages = list(
-            list(role = "system", content = "You are an R visualization expert."),
-            list(role = "user", content = prompt)
-          ),
-          temperature = 0.3,
-          max_tokens = 1500
-        ),
-        timeout(60)
-      )
-
-      if (httr::status_code(response) == 200) {
-        result <- httr::content(response, as = "parsed")
-        if (!is.null(result$choices[[1]]$message$content)) {
-          return(result$choices[[1]]$message$content)
-        }
+  # Check response
+  if (httr::status_code(response) == 200) {
+    result <- httr::content(response, as = "parsed")
+    if (!is.null(result$choices) && length(result$choices) > 0) {
+      if (!is.null(result$choices[[1]]$message$content)) {
+        return(result$choices[[1]]$message$content)
       }
-    },
-    error = function(e) {
-      message("Note: ", e$message)
     }
-  )
+  }
 
-  # Format 2: Ollama-style endpoint
-  tryCatch(
-    {
-      response <- httr::POST(
-        config$api_url,
-        headers,
-        encode = "json",
-        body = list(
-          model = config$model,
-          prompt = prompt,
-          stream = FALSE
-        ),
-        timeout(60)
-      )
-
-      if (httr::status_code(response) == 200) {
-        result <- httr::content(response, as = "parsed")
-        if (!is.null(result$response)) {
-          return(result$response)
-        }
-      }
-    },
-    error = function(e) {
-      message("Note: ", e$message)
-    }
-  )
-
-  stop("Could not communicate with custom AI endpoint at: ", config$api_url)
+  # If we get here, something went wrong
+  error_msg <- httr::content(response, as = "text")
+  stop(paste0("API error (", httr::status_code(response), "): ", error_msg))
 }
