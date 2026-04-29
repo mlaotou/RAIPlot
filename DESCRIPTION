@@ -1,11 +1,15 @@
 Package: RAIPlot
 Title: AI-Powered Adaptive Plot Generator for RStudio
 Version: 0.1.0
-Authors@R: person("Your Name", "Your Email", role = c("aut", "cre"))
+Authors@R: c(
+    person("mlaotou", role = c("aut", "cre"), email = "m_liyi@163.com"),
+    person("RAIPlot Contributors", role = "ctb")
+    )
 Description: An RStudio Addin that uses AI (OpenAI GPT) to generate adaptive 
     ggplot2 visualizations based on user descriptions and data characteristics.
     The tool intelligently parses your data, understands your plotting requirements,
-    and automatically generates publication-ready plots.
+    and automatically generates publication-ready plots. Supports multiple AI models
+    including OpenAI GPT, Anthropic Claude, and local LLMs.
 License: MIT + file LICENSE
 Depends: R (>= 4.0)
 Imports:
