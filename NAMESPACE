@@ -2,9 +2,12 @@
 
 export(ai_plotter_addin)
 export(call_openai_for_plot)
+export(configure_ai)
 export(get_data_info)
+export(get_ai_config)
 export(list_available_data)
 export(raiplot_info)
+export(reset_ai_config)
 export(safe_execute_plot)
 importFrom(shiny,actionButton)
 importFrom(shiny,checkboxInput)
