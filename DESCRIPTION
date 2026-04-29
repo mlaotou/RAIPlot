@@ -1,6 +1,6 @@
 Package: RAIPlot
 Title: AI-Powered Adaptive Plot Generator for RStudio
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: c(
     person("mlaotou", role = c("aut", "cre"), email = "m_liyi@163.com"),
     person("RAIPlot Contributors", role = "ctb")
