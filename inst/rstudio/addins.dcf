@@ -1,4 +1,4 @@
 Name: AI Plot Generator
-Description: Use AI to generate adaptive plots for your data. Describe what you want and let GPT create beautiful ggplot2 visualizations.
+Description: Generate ggplot2 code using AI API based on user description.
 Binding: ai_plotter_addin
 Interactive: true
